@@ -77,4 +77,131 @@ When **rate limiting is implemented across multiple servers**, race conditions c
 | **Sliding Logs** | ✅ Yes | High | High | Precise tracking |
 | **Sliding Window Counter** | ✅ Yes | Medium | Medium | Balanced approach |
 
-Would you like **code examples** for any of these? 🚀
+
+Here’s a **Golang implementation** of the **Sliding Window Counter** rate-limiting algorithm using **Redis** to handle distributed scenarios.  
+
+This implementation ensures that API requests are limited **per user** within a **fixed window** while allowing smooth transitions between windows.  
+
+---
+
+### **🔹 Key Features of the Implementation**
+✅ Uses **Golang** with **Redis** as a distributed rate limiter.  
+✅ Tracks API requests per **user** using **time windows**.  
+✅ Limits requests **per minute** with a **smoother transition** between windows.  
+
+---
+
+### **🔹 Golang Code for Sliding Window Counter Rate Limiter**
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/go-redis/redis/v8"
+	"golang.org/x/net/context"
+)
+
+// Redis client
+var ctx = context.Background()
+var redisClient *redis.Client
+
+// Rate limit parameters
+const (
+	WindowSize = 60               // Time window in seconds (1 minute)
+	MaxRequests = 10              // Max requests allowed per user per window
+)
+
+// Initialize Redis client
+func init() {
+	redisClient = redis.NewClient(&redis.Options{
+		Addr: "localhost:6379", // Redis address
+	})
+}
+
+// Sliding window rate limiter function
+func isRateLimited(userID string) bool {
+	// Get the current timestamp (in seconds)
+	currentTime := time.Now().Unix()
+
+	// Define the Redis key
+	key := fmt.Sprintf("rate_limit:%s", userID)
+
+	// Remove outdated requests (older than the time window)
+	redisClient.ZRemRangeByScore(ctx, key, "0", fmt.Sprintf("%d", currentTime-WindowSize))
+
+	// Get the number of requests in the current window
+	reqCount, err := redisClient.ZCard(ctx, key).Result()
+	if err != nil {
+		log.Println("Error getting request count:", err)
+		return false
+	}
+
+	// If request count exceeds limit, block request
+	if reqCount >= MaxRequests {
+		return true
+	}
+
+	// Add new request with timestamp
+	redisClient.ZAdd(ctx, key, &redis.Z{
+		Score:  float64(currentTime),
+		Member: fmt.Sprintf("%d", currentTime),
+	})
+
+	// Set expiration time for the key
+	redisClient.Expire(ctx, key, time.Duration(WindowSize)*time.Second)
+
+	return false
+}
+
+// Simulated API endpoint
+func handleRequest(userID string) {
+	if isRateLimited(userID) {
+		fmt.Println("❌ Rate limit exceeded for user:", userID)
+	} else {
+		fmt.Println("✅ Request successful for user:", userID)
+	}
+}
+
+func main() {
+	// Simulate API calls from a user
+	userID := "user_123"
+
+	for i := 0; i < 12; i++ { // Try more than 10 requests
+		handleRequest(userID)
+		time.Sleep(1 * time.Second) // Simulate time gap between requests
+	}
+}
+```
+
+---
+
+### **🔹 How It Works**
+1. **Uses Redis Sorted Set (ZSET) to store timestamps** of requests per user.  
+2. **Removes old requests** that fall outside the time window (e.g., 60 seconds).  
+3. **Counts requests in the current window** before processing a new request.  
+4. **Blocks requests if they exceed the limit** (e.g., 10 requests per minute).  
+5. **Allows smooth transitions between time windows**.  
+
+---
+
+### **🔹 Example Output**
+```plaintext
+✅ Request successful for user: user_123
+✅ Request successful for user: user_123
+✅ Request successful for user: user_123
+...
+✅ Request successful for user: user_123
+❌ Rate limit exceeded for user: user_123
+❌ Rate limit exceeded for user: user_123
+```
+
+---
+
+### **🔹 Why Redis for Rate Limiting?**
+- ✅ **Fast & scalable** (handles millions of requests per second).  
+- ✅ **Works in distributed systems** (multiple API servers share limits).  
+- ✅ **Efficient memory usage** with TTL-based expiration.  
+
