@@ -1,4 +1,4 @@
-### System design Basic concepts
+### System design Basic Concepts & Components
 ---
 
 ### 🛠️ **1. APIs (Application Programming Interfaces)**  
