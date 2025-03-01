@@ -1,161 +1,201 @@
-Designing a social media feed, such as Facebook’s News Feed, involves several considerations to ensure scalability, real-time updates, personalization, and efficient data retrieval. Here's a high-level design for building such a system.
-
-### **1. System Requirements and Features**
-- **User Stories**:
-  - Users can post text, images, or videos.
-  - Users can view posts in their feed based on friends, interests, and relevance.
-  - Real-time updates are required for new posts and interactions (likes, comments).
-  - Users can like, comment, and share posts.
-  - The feed should support rich media (images, videos) and text posts.
-  - The system should be efficient in terms of fetching and displaying posts, especially with millions of users and posts.
-
-### **2. Core Components of the System**
-The design will consist of several key components:
-- **User Profile**: Stores user details, interests, and friends.
-- **Posts**: Stores content created by users, including text, images, videos, and metadata.
-- **Feed Generation**: Algorithm to generate personalized feeds for users.
-- **Interactivity**: Likes, comments, shares, and other interactions.
-- **Real-time Updates**: Display real-time changes like new posts, likes, or comments.
-- **Backend API**: A set of APIs to manage the above functionalities (CRUD for posts, likes, comments).
+### **System Design for Social Media Feed (e.g., Facebook's News Feed)**
 
 ---
+## **1. Functional Requirements**
+- Users can create posts with text, images, and videos.
+- Users can follow/unfollow other users.
+- Users see a feed of posts from followed users.
+- Posts are ranked based on relevance (e.g., engagement, recency, personalization).
+- Users can like, comment, and share posts.
+- Real-time updates for new posts and interactions.
+- Infinite scrolling for continuous feed updates.
 
-### **3. Data Models**
+---
+## **2. Non-Functional Requirements**
+- **Scalability**: Should handle millions of users and posts.
+- **Low Latency**: Feed should load in < 200ms.
+- **High Availability**: System should not have downtime.
+- **Consistency vs. Availability**: Use eventual consistency to improve performance.
+- **Security**: Ensure user privacy and data protection.
+- **Fault Tolerance**: Should handle server failures gracefully.
 
-#### **User Table (User Profile)**
-- **User**:
-  - `user_id` (PK)
-  - `username`
-  - `email`
-  - `password_hash`
-  - `friends` (list of `user_ids` or links to a Friend table)
-  - `interests` (list of topics or tags)
-  - `profile_picture_url`
-  - `created_at`
-  - `updated_at`
+---
+## **3. Back of the Envelope Estimation**
+- **Active Users**: 500M daily active users (DAU).
+- **Posts Per Day**: Each user posts ~2 times per day → 1B posts/day.
+- **Feed Reads**: Each user fetches feed 10 times per day → 5B reads/day.
+- **Storage**: Assuming an average post size of 1KB (text + metadata), storage required per day: **1TB/day**.
+- **Bandwidth**: If each feed request fetches 20 posts, with 5B feed reads/day, that results in **100B posts fetched/day**.
 
-#### **Post Table**
-- **Post**:
-  - `post_id` (PK)
-  - `user_id` (FK referencing User)
-  - `content` (text, URL, image/video link)
-  - `media_url` (optional, link to the media associated with the post)
-  - `timestamp` (date/time)
-  - `likes_count` (number of likes)
-  - `comments_count` (number of comments)
-  - `tags` (optional, list of hashtags or keywords)
-  - `visibility` (public, friends, private)
-  - `is_deleted` (boolean)
+---
+## **4. Database Design**
+### **Tables**
+
+#### **Users Table**
+```sql
+CREATE TABLE users (
+    user_id BIGINT PRIMARY KEY,
+    username VARCHAR(255),
+    email VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### **Posts Table**
+```sql
+CREATE TABLE posts (
+    post_id BIGINT PRIMARY KEY,
+    user_id BIGINT,
+    content TEXT,
+    media_url TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+```
+
+#### **Followers Table**
+```sql
+CREATE TABLE followers (
+    follower_id BIGINT,
+    following_id BIGINT,
+    PRIMARY KEY (follower_id, following_id),
+    FOREIGN KEY (follower_id) REFERENCES users(user_id),
+    FOREIGN KEY (following_id) REFERENCES users(user_id)
+);
+```
 
 #### **Likes Table**
-- **Like**:
-  - `like_id` (PK)
-  - `post_id` (FK referencing Post)
-  - `user_id` (FK referencing User)
-  - `timestamp`
+```sql
+CREATE TABLE likes (
+    like_id BIGINT PRIMARY KEY,
+    user_id BIGINT,
+    post_id BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (post_id) REFERENCES posts(post_id)
+);
+```
 
 #### **Comments Table**
-- **Comment**:
-  - `comment_id` (PK)
-  - `post_id` (FK referencing Post)
-  - `user_id` (FK referencing User)
-  - `content`
-  - `timestamp`
-
-#### **Feed Table (for personalized feed)**
-- **Feed**:
-  - `feed_id` (PK)
-  - `user_id` (FK referencing User)
-  - `post_id` (FK referencing Post)
-  - `timestamp` (order of post relevance)
-  - `visibility` (public, friends, etc.)
-  - **Indexes**: Ensure fast lookup for relevant feeds, posts, and user interactions.
+```sql
+CREATE TABLE comments (
+    comment_id BIGINT PRIMARY KEY,
+    user_id BIGINT,
+    post_id BIGINT,
+    content TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (post_id) REFERENCES posts(post_id)
+);
+```
 
 ---
+## **5. API Design**
+
+### **1. Create Post**
+```
+POST /posts
+{
+    "user_id": 123,
+    "content": "This is a new post",
+    "media_url": "https://cdn.example.com/image.jpg"
+}
+```
+
+### **2. Get Feed**
+```
+GET /feed?user_id=123&limit=20
+```
+**Response:**
+```
+{
+    "posts": [
+        {"post_id": 1, "user_id": 456, "content": "Hello world", "likes": 100, "comments": 10},
+        {"post_id": 2, "user_id": 789, "content": "New update!", "likes": 50, "comments": 5}
+    ]
+}
+```
+
+### **3. Like a Post**
+```
+POST /like
+{
+    "user_id": 123,
+    "post_id": 456
+}
+```
+
+### **4. Follow User**
+```
+POST /follow
+{
+    "follower_id": 123,
+    "following_id": 456
+}
+```
+
+---
+## **6. High-Level Components with AWS Services**
+### **1. API Layer**
+- AWS **API Gateway**
+- AWS **Lambda** (for serverless API processing) or **EC2** (if using monolithic service)
+- AWS **Elastic Load Balancer** (for distributing traffic)
+
+### **2. Storage Layer**
+- **Amazon RDS (PostgreSQL/MySQL)**: Store structured data (users, posts, likes).
+- **Amazon S3**: Store media content (images, videos).
+- **Amazon DynamoDB**: Fast access for follower relationships.
+
+### **3. Feed Generation & Ranking**
+- AWS **Kinesis**: Process user activity logs in real-time.
+- AWS **Lambda** + AWS **ElastiCache (Redis)**: Precompute feeds for active users.
 
 ### **4. Real-time Updates**
+- AWS **WebSockets (via API Gateway)**: Send real-time notifications.
+- AWS **SNS/SQS**: Handle async notifications.
 
-#### **Push Notifications for Feed Updates**
-- **Amazon SNS** or **AWS AppSync**: Use **Amazon SNS** for real-time notifications to the user's feed when new posts are made by friends, when posts are liked or commented on, etc.
-  - **SNS Topics**: Each user subscribes to topics like `user/{user_id}/posts`, `user/{user_id}/interactions` to get updates.
-  - **AppSync with WebSockets**: AWS AppSync can be used for real-time GraphQL-based subscriptions for live updates (e.g., when a user’s friend posts something).
-
-#### **Streaming for Real-Time Interactions**
-- Use **Amazon Kinesis** or **Apache Kafka** to stream data about user interactions (likes, comments, shares).
-  - **Lambda Functions** or **Kinesis Consumers** can process this data and update the corresponding user feeds or post metadata (e.g., likes count).
+### **5. Analytics & Monitoring**
+- AWS **CloudWatch**: Monitor API performance.
+- AWS **Athena**: Query logs and track engagement.
 
 ---
+## **7. Addressing Key Issues & Solutions**
 
-### **5. Personalization and Feed Generation**
+### **1. Feed Generation Strategy**
+#### **Fan-out on Write (Push Model)** ✅
+- When a user posts, we push it to their followers' precomputed feed stored in **Redis**.
+- Works well for high-read, low-write systems (like Twitter).
 
-To personalize the feed, the system must be able to dynamically determine the order and relevance of posts for each user. Several strategies can be used for personalized feeds:
+#### **Fan-out on Read (Pull Model)** 🔄
+- When a user loads their feed, we dynamically fetch posts from followed users.
+- Works well for low-read, high-write systems.
 
-#### **Algorithmic Feed Generation**
-1. **EdgeRank-like Algorithm**: Facebook’s algorithm for determining the relevance of a post is based on several factors:
-   - **Affinity**: How much the user has interacted with the author of the post (e.g., likes, comments, and shares).
-   - **Recency**: How recent the post is.
-   - **Type of Content**: Prioritize certain types of content (e.g., video, image, text) based on the user's preferences.
-   - **Engagement**: The post’s popularity (e.g., number of likes, comments, shares).
-   - **User Interests**: If the post matches the user’s interests (e.g., from friends or topics they follow).
+💡 **Hybrid Approach:** Use a push model for active users and a pull model for inactive users.
 
-2. **Graph-Based Model**: Represent users and their relationships (friendships, followers) as a graph. Posts made by closely connected users (e.g., friends or followers) should be given higher relevance in the user’s feed.
+### **2. Ranking & Personalization**
+- Use **Machine Learning (AWS SageMaker)** to rank posts based on:
+  - Recency
+  - Engagement (likes/comments)
+  - User interactions (past behavior)
+  - Trending posts
 
-3. **Machine Learning (ML)**: Use a recommendation system to personalize the feed based on user interactions, past behavior, and content preferences (collaborative filtering, content-based filtering).
+### **3. Handling Hot Users (Celebrity Accounts)**
+- Store their posts separately in **ElastiCache (Redis)** and use **CDN (CloudFront)** for fast delivery.
 
-#### **Cache Strategy**
-- Use **Redis** or **Amazon ElastiCache** to cache feeds for fast retrieval and reduce load on the backend database. This is especially important when users have millions of followers/friends, and their feeds need to be generated quickly.
-  - **Feed Pre-generation**: You can pre-generate feeds for users with large followings and store them in a cache, refreshing them at regular intervals or when significant updates happen.
+### **4. Real-time Engagement Updates**
+- Use **WebSockets** (API Gateway) for real-time like/comments count updates.
 
----
-
-### **6. Efficient Retrieval and Display of Posts**
-
-#### **Pagination and Lazy Loading**
-- **Pagination**: Limit the number of posts retrieved per request (e.g., 20 posts per API call). This reduces the load on the backend and ensures fast performance.
-- **Infinite Scrolling**: Use infinite scrolling with pagination, loading more posts as the user scrolls down the feed.
-- **Backend Query Optimization**: Use **indexing** in the database to optimize queries when fetching posts based on the feed, likes, and comments.
-  - **Primary Indexes**: Post ID, User ID (for feed generation).
-  - **Secondary Indexes**: Timestamp (for recency), popularity score (for ranking).
-
-#### **Real-time Data Fetching**
-- **AWS AppSync**: Use AWS AppSync with real-time subscriptions to update the feed without needing to refresh the page. For example, when a new post is added or a comment is made, the feed can be updated in real-time.
-
-#### **Data Aggregation**
-- Use **AWS Lambda** to aggregate data (likes, comments, shares) on posts to update the post’s metadata without overloading the main database. This can be done asynchronously using background jobs.
+### **5. Rate Limiting & Security**
+- Implement **AWS WAF** to prevent abuse.
+- Use **IAM Roles & Cognito** for authentication.
+- Implement **API Gateway Rate Limiting**.
 
 ---
+## **Conclusion**
+- A **scalable, real-time, low-latency** feed system requires a mix of **SQL, NoSQL, caching, event processing, and ranking models**.
+- **AWS services** like RDS, DynamoDB, ElastiCache, Kinesis, and S3 help scale efficiently.
+- **Hybrid fan-out strategies** ensure an optimized feed experience.
+- **Machine learning models** enhance engagement ranking.
 
-### **7. Data Storage and Scalability**
+🚀 **Final Thoughts:** The system should balance **performance, scalability, and personalization** while ensuring **high availability** and **low latency**.
 
-#### **Database Considerations**
-- **Amazon DynamoDB**: A NoSQL database like DynamoDB is suitable for high throughput, low-latency reads and writes. It can store posts, user profiles, and interaction data, and scale automatically as traffic increases.
-  - **Feed Table**: This can store the user’s personalized feed, and the queries can be optimized with appropriate indexes (e.g., user_id, post_id, timestamp).
-- **Amazon RDS**: Use relational databases like PostgreSQL for storing interactions (likes, comments) that require complex queries, aggregations, or transactional consistency.
-- **Amazon S3**: For storing large media files (images, videos) associated with posts.
-
-#### **Scalability and Fault Tolerance**
-- Use **auto-scaling** for backend services (e.g., Lambda) to handle spikes in requests.
-- **DynamoDB Auto-scaling** to automatically adjust capacity for growing data.
-- Use **Amazon CloudFront** for caching media files and serving content globally with low latency.
-
----
-
-### **8. Security Considerations**
-- **AWS Cognito** for managing user authentication and authorization.
-- **OAuth** for third-party logins (e.g., Google, Facebook).
-- **IAM roles and policies** to manage access to backend resources.
-- **HTTPS** to ensure secure communication between clients and backend services.
-- **Rate Limiting and Throttling**: Use **API Gateway** to prevent abuse by rate-limiting API requests.
-
----
-
-### **Summary of AWS Services**
-- **Frontend**: Amazon S3, Amazon CloudFront
-- **Backend**: AWS Lambda, Amazon API Gateway
-- **Real-Time Updates**: Amazon SNS, AWS AppSync, Kinesis
-- **Database**: Amazon DynamoDB (for feeds and posts), Amazon RDS (for likes and comments)
-- **Cache**: Amazon ElastiCache (Redis)
-- **Media Storage**: Amazon S3
-- **Analytics**: Amazon Kinesis, AWS Lambda for real-time data processing
-
-This design ensures the system can handle millions of posts, real-time updates, and personalized feeds while providing a scalable and fault-tolerant architecture using AWS services.
