@@ -6,10 +6,9 @@
 1. **Shorten URL** – Users should be able to generate a short URL from a long URL.
 2. **Redirect to Original URL** – When a short URL is accessed, it should redirect to the original URL.
 3. **Custom Short URLs** – Users should have an option to specify custom aliases.
-4. **Analytics & Tracking** – Track clicks, location, browser type, device, etc.
-5. **Expiration & Deletion** – URLs should have an optional expiry time.
-6. **User Accounts & Authentication** – Registered users can manage their shortened URLs. - (optional)
-7. **Rate Limiting** – Prevent abuse by restricting excessive requests.
+4. **Expiration & Deletion** – URLs should have an optional expiry time.
+5. **User Accounts & Authentication** – Registered users can manage their shortened URLs. - (optional)
+6. **Rate Limiting** – Prevent abuse by restricting excessive requests.
 
 ---
 
@@ -46,18 +45,9 @@
 | `expires_at` | TIMESTAMP (NULLABLE) | Expiration time |
 | `user_id`    | VARCHAR(50) (Nullable) | Optional user who created it |
 
-### **Table: `clicks` (For analytics)**
-| Column       | Type       | Description |
-|-------------|-----------|------------|
-| `id`        | UUID (Primary Key) | Unique identifier |
-| `short_url` | VARCHAR(10) | Short URL being accessed |
-| `timestamp` | TIMESTAMP  | Time of access |
-| `ip_address` | VARCHAR(45) | User's IP |
-| `user_agent` | TEXT       | Browser/device details |
 
 #### **Storage Choice:**
 - **Primary DB**: **Amazon DynamoDB** (for fast key-value lookups)
-- **Analytics DB**: **Amazon Redshift / Athena** (for click tracking)
 
 ---
 
@@ -92,26 +82,6 @@ GET /expand/abcd123
 }
 ```
 
-### **3. Track Analytics**
-**Request:**
-```http
-GET /analytics/abcd123
-```
-**Response:**
-```json
-{
-    "total_clicks": 500,
-    "geo_distribution": {
-        "US": 300,
-        "India": 100,
-        "Others": 100
-    },
-    "device_distribution": {
-        "Mobile": 350,
-        "Desktop": 150
-    }
-}
-```
 
 ---
 
@@ -119,18 +89,14 @@ GET /analytics/abcd123
 ### **Components:**
 1. **API Gateway + Lambda** – Handle API requests (URL shortening, redirection).
 2. **DynamoDB** – Key-value store for short URL mappings.
-3. **CloudFront + S3** – Serve static pages for UI.
-4. **SQS (Queue) + Lambda** – Asynchronous logging of clicks.
-5. **Redshift/Athena** – Analytics for tracking URLs.
-6. **ElastiCache (Redis)** – Cache hot URLs for faster redirects.
-7. **CloudWatch** – Monitor API performance and errors.
+3. **ElastiCache (Redis)** – Cache hot URLs for faster redirects.
+4. **CloudWatch** – Monitor API performance and errors.
 
 ### **Architecture Flow**
 1. **User Requests Short URL → API Gateway → Lambda → DynamoDB**
 2. **User Visits Short URL → API Gateway → Lambda**
    - If cached → Redirect immediately
    - Else → Lookup DynamoDB, update cache, redirect
-3. **Analytics Logging → SQS → Lambda → Redshift/Athena**
 
 ---
 
@@ -156,10 +122,4 @@ GET /analytics/abcd123
 
 ---
 
-## **8. Final Thoughts**
-This design provides:
-✔ **High availability** (DynamoDB, caching, load balancing)  
-✔ **Low latency** (Redis caching, API Gateway, Lambda)  
-✔ **Scalability** (SQS for analytics, Redshift for reporting)  
-✔ **Security & Rate Limiting** (AWS WAF, CloudWatch monitoring)  
 
