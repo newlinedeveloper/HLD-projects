@@ -191,11 +191,4 @@ POST /follow
 - Implement **API Gateway Rate Limiting**.
 
 ---
-## **Conclusion**
-- A **scalable, real-time, low-latency** feed system requires a mix of **SQL, NoSQL, caching, event processing, and ranking models**.
-- **AWS services** like RDS, DynamoDB, ElastiCache, Kinesis, and S3 help scale efficiently.
-- **Hybrid fan-out strategies** ensure an optimized feed experience.
-- **Machine learning models** enhance engagement ranking.
-
-🚀 **Final Thoughts:** The system should balance **performance, scalability, and personalization** while ensuring **high availability** and **low latency**.
 
