@@ -70,10 +70,10 @@ Content-Type: application/json
 }
 ```
 
-### **2. Expand URL**
+### **2. Redirect URL**
 **Request:**
 ```http
-GET /expand/abcd123
+GET /:short-code
 ```
 **Response:**
 ```json
@@ -81,6 +81,8 @@ GET /expand/abcd123
     "long_url": "https://www.example.com/some-long-url"
 }
 ```
+
+and it will redirect to original site
 
 
 ---
