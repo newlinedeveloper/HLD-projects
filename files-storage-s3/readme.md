@@ -1,174 +1,214 @@
-Here's a comprehensive **System Design** for building a **distributed file storage system like Amazon S3**, touching all major aspects: **functional**, **non-functional**, **estimates**, **database design**, **API design**, **HLD**, and **key issue resolutions**.
+# **Distributed File Storage System like Amazon S3**
 
 ---
 
 ## ✅ 1. Functional Requirements
 
-| Feature                        | Description |
-|-------------------------------|-------------|
-| **Upload File**               | Users can upload objects (files, images, videos, etc.) |
-| **Download File**             | Users can retrieve stored objects |
-| **Delete File**               | Users can delete stored objects |
-| **Versioning** *(optional)*   | Ability to maintain object versions |
-| **Buckets**                   | Logical containers to group objects |
-| **Authentication & ACLs**     | Support object-level access control |
-| **Metadata Support**          | Attach key-value metadata to objects |
+* **Object Storage**: Store and retrieve files (objects) with metadata.
+* **Scalability**: Seamless scaling for millions of files and requests.
+* **Data Distribution**: Split and store data across multiple nodes/regions.
+* **High Durability & Availability**: Ensure 99.999999999% durability (11 9s).
+* **Access Control**: Bucket-level and object-level permissioning.
+* **Data Versioning**: Maintain versions of objects.
+* **Replication**: Cross-region and intra-region replication for disaster recovery.
+* **Searchable Metadata**: Fast retrieval based on tags or metadata.
 
 ---
 
 ## ✅ 2. Non-Functional Requirements
 
-| Requirement            | Details |
-|------------------------|---------|
-| **Scalability**         | Handle petabytes of data & millions of users/files |
-| **Availability**        | ≥ 99.99% uptime (use multi-zone replication) |
-| **Durability**          | ≥ 99.999999999% (11 9s) durability via replication |
-| **Low Latency**         | ≤ 100 ms for object access in typical use |
-| **Security**            | Encryption (at rest & in transit), ACLs |
-| **Fault Tolerance**     | Detect and recover from node failures |
-| **Consistency**         | Eventual or strong consistency depending on API |
+* **Durability**: 99.999999999% (11 9s)
+* **Availability**: 99.99%+
+* **Latency**: <100ms for most operations
+* **Consistency**: Read-after-write consistency for new objects
+* **Security**: Encryption at rest and in transit, IAM-based access
+* **Cost-effectiveness**: Tiered storage (frequent, infrequent, archive)
 
 ---
 
-## ✅ 3. Back of the Envelope Estimation
+## ✅ 3. Back-of-the-Envelope Estimation
 
-| Metric                        | Estimate |
-|------------------------------|----------|
-| **Daily uploads**             | 10 million objects/day |
-| **Avg object size**           | 1 MB |
-| **Daily storage need**        | 10 TB/day |
-| **1-year storage**            | ~3.6 PB |
-| **QPS (uploads/downloads)**   | 10,000–50,000 |
-| **Metadata per object**       | 1 KB |
-
----
-
-## ✅ 4. Database Design (Metadata Store)
-
-We separate **file storage (blobs)** from **metadata storage**.
-
-### 📘 Object Metadata Table
-
-| Field         | Type        | Description                       |
-|---------------|-------------|-----------------------------------|
-| `object_id`   | UUID (PK)   | Unique ID                         |
-| `bucket_id`   | FK          | Refers to user’s logical bucket   |
-| `filename`    | VARCHAR     | Original file name                |
-| `version_id`  | UUID        | Optional for versioning           |
-| `size_bytes`  | BIGINT      | File size                         |
-| `content_type`| VARCHAR     | MIME type                         |
-| `created_at`  | TIMESTAMP   | Upload time                       |
-| `checksum`    | STRING      | SHA256 or MD5 hash                |
-| `replicas`    | JSONB       | List of storage node locations    |
-| `is_deleted`  | BOOL        | For soft deletes                  |
+* **Users**: 500 million
+* **Average files/user**: 1,000
+* **Total objects**: 500 billion
+* **Average file size**: 1 MB
+* **Total storage**: 500 billion × 1 MB = \~500 PB
+* **Daily upload volume**: 5 PB/day
+* **Daily requests**: 10 billion read/write/list/delete
 
 ---
 
-## ✅ 5. RESTful API Design
+## ✅ 4. Database Design
 
-| Method | Endpoint                      | Description                     |
-|--------|-------------------------------|---------------------------------|
-| POST   | `/buckets/:bucket/upload`     | Upload object                   |
-| GET    | `/buckets/:bucket/:file`      | Download object                 |
-| DELETE | `/buckets/:bucket/:file`      | Delete object                   |
-| GET    | `/buckets/:bucket/list`       | List objects in a bucket        |
-| GET    | `/buckets/:bucket/meta/:file` | Get metadata                    |
-| PUT    | `/buckets/:bucket/acl`        | Set access control              |
+> For metadata and access control.
+
+### 🔹 Tables
+
+#### `buckets`
+
+| Field       | Type      |
+| ----------- | --------- |
+| bucket\_id  | UUID      |
+| name        | STRING    |
+| owner\_id   | UUID      |
+| region      | STRING    |
+| created\_at | TIMESTAMP |
+
+#### `objects`
+
+| Field          | Type      |
+| -------------- | --------- |
+| object\_id     | UUID      |
+| bucket\_id     | UUID      |
+| key            | STRING    |
+| version\_id    | STRING    |
+| size           | INT       |
+| checksum       | STRING    |
+| storage\_class | ENUM      |
+| created\_at    | TIMESTAMP |
+
+#### `access_policies`
+
+| Field       | Type                     |
+| ----------- | ------------------------ |
+| policy\_id  | UUID                     |
+| bucket\_id  | UUID                     |
+| user\_id    | UUID                     |
+| permissions | ENUM (read/write/delete) |
+| expires\_at | TIMESTAMP                |
 
 ---
 
-## ✅ 6. High-Level Components
+## ✅ 5. API Design
+
+### 🔹 Object API
+
+* `PUT /buckets/{bucket}/objects/{key}` – Upload object
+* `GET /buckets/{bucket}/objects/{key}` – Download object
+* `DELETE /buckets/{bucket}/objects/{key}` – Delete object
+* `GET /buckets/{bucket}/objects` – List objects
+
+### 🔹 Bucket API
+
+* `POST /buckets` – Create new bucket
+* `DELETE /buckets/{bucket}` – Delete bucket
+* `GET /buckets/{bucket}` – Get bucket details
+
+### 🔹 Access & Versioning
+
+* `PUT /buckets/{bucket}/versioning` – Enable/disable versioning
+* `POST /buckets/{bucket}/policy` – Apply bucket access policy
+* `GET /buckets/{bucket}/objects/{key}/versions` – List versions
+
+---
+
+## ✅ 6. High-Level Architecture with AWS Services
 
 ```
-           +---------------------+
-           |    Load Balancer    |
-           +---------------------+
-                    |
-        +-----------+-----------+
-        |                       |
-+----------------+     +----------------+
-| API Gateway     |     | Auth Service   |
-+----------------+     +----------------+
-        |
-        v
-+-----------------------+
-|  Metadata Service     | <---> SQL/NoSQL DB
-+-----------------------+
-        |
-        v
-+----------------------------+
-| Storage Manager (Scheduler)| <-- Track replication, healing
-+----------------------------+
-        |
-        v
-+-----------+  +-----------+  +-----------+
-| Blob Node |  | Blob Node |  | Blob Node |
-| (S3-like) |  | (S3-like) |  | (S3-like) |
-+-----------+  +-----------+  +-----------+
+                  ┌──────────────┐
+                  │  Client App  │
+                  └──────┬───────┘
+                         ▼
+                 ┌────────────────┐
+                 │   API Gateway  │
+                 └──────┬─────────┘
+                        ▼
+                 ┌───────────────┐
+                 │ Application   │
+                 │ Layer (Lambda│
+                 │ or ECS)       │
+                 └──────┬────────┘
+                        ▼
+          ┌─────────────┼──────────────┐
+          ▼             ▼              ▼
+     S3 Buckets     DynamoDB      KMS/STS/IAM
+   (Object Storage) (Metadata)     (Security)
+        │                                      
+        ▼                  
+  S3 Replication & 
+ Lifecycle Policies
 
+             ┌──────────────┐
+             │  CloudTrail  │ <── Logs/Audits
+             └──────────────┘
+             ┌──────────────┐
+             │ CloudWatch   │ <── Monitoring
+             └──────────────┘
 ```
 
 ---
 
-## ✅ 7. Key Issues & Solutions
-
-| Issue                        | Explanation & Solution |
-|-----------------------------|------------------------|
-| **Data durability**         | Use **replication** across availability zones (e.g., 3 copies) or **erasure coding** |
-| **Scalability**             | Use **sharding by bucket/object**, scale blob nodes horizontally |
-| **Metadata bottleneck**     | Cache frequently accessed metadata in **Redis**, distribute DB by bucket |
-| **File deduplication**      | Use **content-based hashing (SHA256)** to detect duplicate content |
-| **Large file upload**       | Use **multi-part upload**, merge parts server-side |
-| **Concurrency**             | Use optimistic locking or versioning |
-| **Geo-redundancy**          | Replicate to another region asynchronously |
-| **Authentication & ACLs**  | Integrate with OAuth, JWT; Store ACLs with metadata |
-| **Indexing/Search**         | Use ElasticSearch or S3 Inventory-like service for large-scale listing |
-| **Garbage Collection**      | Mark-and-sweep logic for deleted/unreferenced blobs |
-| **Monitoring & Metrics**    | Expose Prometheus metrics, alert on replication lags or failures |
+## ✅ 7. Key Design Considerations
 
 ---
 
-## ✅ 8. Storage Strategy
+### 🔹 A. **Data Distribution & Durability**
 
-- **Write Path**:
-  - Client → API Gateway → Store metadata → Upload to 3 blob nodes → Return success
-- **Read Path**:
-  - Client → API Gateway → Lookup metadata → Read from nearest blob node
-- **Delete**:
-  - Mark in metadata → Async deletion in blob nodes
-- **Replication**:
-  - Each blob node replicates its chunks to 2 others asynchronously
-- **Multi-Part Upload**:
-  - Chunk files, parallel upload → commit at server
+* **Sharding**: Objects are split using consistent hashing or UUID.
+* **Replication**:
+
+  * **Intra-region**: 3 copies across availability zones
+  * **Cross-region**: Optional for DR
+* **Durability**: S3 replicates across multiple data centers, uses **erasure coding** for larger objects
 
 ---
 
-## ✅ 9. Tech Stack
+### 🔹 B. **Data Consistency**
 
-| Layer                  | Stack |
-|------------------------|-------|
-| API Layer              | Golang + Gin |
-| Auth                   | JWT / OAuth |
-| Metadata DB            | PostgreSQL / DynamoDB |
-| Object Storage         | Custom Blob nodes (Golang, minIO-like) |
-| Cache                  | Redis |
-| Queue (async ops)      | Kafka or RabbitMQ |
-| Monitoring             | Prometheus + Grafana |
-| Load Balancer          | AWS ALB / NGINX |
+* **Read-after-write** consistency for new PUTs.
+* **Eventual consistency** for overwrite/deletes (unless strong consistency is enforced).
+* Metadata updates in **DynamoDB** or **Aurora**.
 
 ---
 
-## 🧪 Sample Scenario: Upload File
+### 🔹 C. **Access Control & Security**
 
-1. Client POSTs file to `/buckets/photos/upload`
-2. API Gateway authenticates JWT token
-3. Metadata Service:
-   - Stores filename, checksum, content-type
-   - Generates `object_id`
-   - Picks 3 blob nodes for replication
-4. Client uploads to selected blob nodes (direct pre-signed URLs or via proxy)
-5. Metadata is marked as **active** when upload completes
+* **Bucket Policies** (resource-based)
+* **IAM Policies** (user-based)
+* **Signed URLs** for temporary access
+* **SSE (Server-Side Encryption)** using **S3-managed keys** or **KMS**
 
 ---
 
-Would you like a basic prototype (e.g., using Gin + MinIO backend) to simulate this architecture?
+### 🔹 D. **Versioning**
+
+* When enabled, each upload generates a new version ID.
+* Deletes can be "soft" with delete markers.
+* Object listing can return latest or all versions.
+
+---
+
+### 🔹 E. **Performance & Cost Optimization**
+
+* **Storage Classes**:
+
+  * Standard
+  * Intelligent-Tiering
+  * Infrequent Access
+  * Glacier (Archive)
+* **Lifecycle Policies**: Move old versions to Glacier or delete after N days.
+* **CloudFront Integration**: For edge caching.
+
+---
+
+### 🔹 F. **Failure Handling**
+
+* Use **retries with exponential backoff** on client.
+* Automatic failover via **multi-AZ replication**.
+* Global replication avoids regional outages.
+
+---
+
+## ✅ 8. Bonus Features
+
+* **Multipart Uploads**: For large files (>5MB)
+* **Presigned URLs**: For secure client-side uploads
+* **Event Notifications**: S3 → SNS/Lambda for post-upload processing
+* **Audit Trail**: CloudTrail logs access for security compliance
+
+---
+
+## ✅ Conclusion
+
+A distributed file system like Amazon S3 focuses on durability, scalability, and secure access. By using erasure coding, sharding, replication, and a metadata-driven architecture, it ensures object availability and performance. Integration with IAM, versioning, and lifecycle rules help enforce policies and control cost.
+
