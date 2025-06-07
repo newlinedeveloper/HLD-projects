@@ -1,6 +1,5 @@
 ## System Design for a Ride-Sharing Platform like Uber or Lyft
 
----
 
 # 🚗 **Ride-Sharing System Design (Uber/Lyft Clone)**
 
