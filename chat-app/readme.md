@@ -1,5 +1,4 @@
-Here’s a comprehensive **System Design for a Chat Application like WhatsApp** — covering all requested aspects including functional and non-functional requirements, estimation, architecture, database schema, APIs, and solutions to key design challenges.
-
+# System Design for a Chat Application like WhatsApp
 ---
 
 ## ✅ 1. Functional Requirements
@@ -112,37 +111,6 @@ POST /media/upload             # returns a media URL
 
 ---
 
-## 🧱 6. High-Level Components
-
-```plaintext
-             +----------------------+
-             |   Mobile/Web Client  |
-             +---------+------------+
-                       |
-          REST API     |     WebSocket
-                       v
-               +-------+-------+          +------------------+
-               |  API Gateway  +--------->+  Notification Svc |
-               +-------+-------+          +------------------+
-                       |
-        +--------------+--------------+
-        |                             |
-+-------v------+         +------------v-----------+
-| Message Svc  |         | Auth/User/Group Svc    |
-+-------+------+         +------------+-----------+
-        |                             |
-+-------v-------+         +-----------v-----------+
-| DB (NoSQL)    |         |  Relational DB (SQL)  |
-| Messages      |         |  Users, Groups        |
-+---------------+         +-----------------------+
-        |
-+----------------+
-| Media Storage  |  (S3/MinIO/CDN)
-+----------------+
-```
-
----
-
 ## 🚧 7. Key Issues & Solutions
 
 | Issue                        | Solution                                                                 |
@@ -160,15 +128,3 @@ POST /media/upload             # returns a media URL
 
 ---
 
-## 🧪 Additional Considerations
-
-- **Kafka**: For event stream — message delivery, notifications
-- **Redis**: For caching user sessions/presence
-- **Push Notification Gateway**: FCM/OneSignal
-- **Monitoring**: Prometheus + Grafana + Sentry
-- **CDN**: For media access optimization
-- **Rate limiting**: IP/user-level with token bucket algorithm
-
----
-
-Would you like a **Golang prototype** using Gin + WebSocket + Redis + PostgreSQL/Mongo?
