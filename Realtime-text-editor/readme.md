@@ -1,5 +1,4 @@
-Designing a **web-based collaborative text editor** like **Google Docs** involves solving challenges around **real-time synchronization**, **conflict resolution**, **latency**, and **persistence**.
----
+# Designing a **web-based collaborative text editor** like **Google Docs**
 
 ## 📌 1. Functional Requirements
 
