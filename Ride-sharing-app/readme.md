@@ -1,4 +1,4 @@
-Here's a detailed **System Design for a Ride-Sharing Platform like Uber or Lyft**, covering all key aspects:  
+## System Design for a Ride-Sharing Platform like Uber or Lyft
 
 ---
 
