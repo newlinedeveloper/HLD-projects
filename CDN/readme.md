@@ -1,109 +1,234 @@
 # System Design: Content Delivery Network (CDN)
 
-## 1. Functional Requirements
+## ✅ 1. Functional Requirements
 
-- **Content Distribution**: Deliver static (images, videos, CSS, JS) and dynamic content efficiently.
-- **Caching Mechanism**: Cache content at edge locations to reduce load times.
-- **Load Balancing**: Distribute traffic among multiple edge and origin servers.
-- **Content Purging & Invalidation**: Mechanism to update or remove stale content.
-- **Security**: DDoS protection, SSL/TLS encryption, and authentication.
-- **Logging & Analytics**: Collect performance metrics, access logs, and user behavior analytics.
-- **Geo-based Content Delivery**: Serve users from the nearest edge server.
-- **Access Control**: Restrict content access via tokens or signed URLs.
+* **Static Content Delivery**: Deliver JS, CSS, images, videos, etc.
+* **Dynamic Content Acceleration**: Optimize personalized API responses (e.g., HTML pages).
+* **Geo-Distribution**: Route users to the nearest Point of Presence (PoP).
+* **Caching**: Store content closer to end users to reduce origin load.
+* **Content Invalidation & Purging**: Support cache refresh or invalidation.
+* **HTTPS Support**: Secure content transmission.
+* **Access Control**: Token-based access or signed URLs.
+* **Analytics & Logging**: Monitor usage, cache hit/miss, latency.
 
-## 2. Non-Functional Requirements
+---
 
-- **Scalability**: Handle increasing user traffic and content volume.
-- **Availability**: Ensure high uptime (99.99%).
-- **Performance**: Low-latency content delivery (<50ms response time in most regions).
-- **Fault Tolerance**: Automatic failover and redundancy.
-- **Compliance**: GDPR, CCPA for user data privacy.
-- **Cost-effectiveness**: Optimize storage and data transfer costs.
+## ✅ 2. Non-Functional Requirements
 
-## 3. Back-of-the-Envelope Estimation
+* **High Availability**: 99.99% uptime via redundant edge locations.
+* **Low Latency**: Target <50ms content delivery in most regions.
+* **Scalability**: Handle millions of requests per second.
+* **Security**: TLS, DDoS protection, origin shielding.
+* **Cost-Efficient**: Minimize egress & compute with optimal caching.
+* **Fault Tolerance**: Automatic fallback to backup edge/origin.
 
-- **User Base**: 100 million daily active users
-- **Average Requests/User**: 50 requests/day
-- **Total Requests**: 100M x 50 = 5 billion requests/day
-- **Peak Traffic**: 500M requests/hour (~138,888 requests/sec)
-- **Storage**: If avg content size = 500KB, daily delivery = 2.5PB
-- **Cache Hit Rate**: Assume 90%, reduces origin load to 10% of total requests
+---
 
-## 4. Database Design
+## ✅ 3. Back-of-the-Envelope Estimation
 
-### **Tables:**
+* **Users**: 100M DAUs
+* **Avg Requests/User/Day**: 50
+* **Total Requests/Day**: 5B
+* **Peak RPS**: \~150,000 (conservative estimate)
+* **Content Size**: 500KB avg → \~2.5PB/day in bandwidth
+* **Edge Cache Hit Ratio**: 90% → Only 10% reach origin
 
-1. **Content Metadata Table**
-   - `content_id (PK)`, `url`, `checksum`, `expiration_time`, `cache_status`
-2. **User Access Logs**
-   - `log_id (PK)`, `user_id`, `content_id`, `timestamp`, `geo_location`
-3. **CDN Configuration**
-   - `config_id (PK)`, `cache_policies`, `geo_restrictions`, `compression_settings`
-4. **Analytics & Reporting**
-   - `analytics_id (PK)`, `content_id`, `requests_count`, `cache_hits`, `bandwidth_used`
+---
 
-### **Storage Solutions:**
-- **SQL (PostgreSQL/MySQL)**: Metadata, user access logs
-- **NoSQL (Cassandra/DynamoDB)**: High throughput logging, analytics
-- **In-Memory (Redis/Memcached)**: Fast lookup for cached content
+## ✅ 4. Database Design
 
-## 5. API Design
+While CDN is mostly file-serving, **metadata, logging**, and **analytics** use persistent storage.
 
-### **Content Management API**
-- `POST /api/content/upload` – Upload new content
-- `DELETE /api/content/{content_id}` – Purge content
-- `PUT /api/content/{content_id}` – Update content metadata
+### Tables
 
-### **Cache Management API**
-- `POST /api/cache/purge` – Clear cache globally or regionally
-- `POST /api/cache/invalidate` – Invalidate stale content
+#### `content_metadata`
 
-### **Analytics API**
-- `GET /api/analytics/usage` – Get content usage stats
-- `GET /api/analytics/performance` – Fetch performance metrics
+| Field         | Type          |
+| ------------- | ------------- |
+| content\_id   | UUID (PK)     |
+| url           | TEXT          |
+| checksum      | STRING        |
+| ttl           | INT (seconds) |
+| created\_at   | Timestamp     |
+| region        | TEXT          |
+| cache\_status | ENUM          |
 
-### **Security API**
-- `POST /api/security/access-control` – Set access control policies
-- `POST /api/security/ssl` – Configure SSL certificates
+#### `access_logs`
 
-## 6. High-Level Components
+| Field         | Type      |
+| ------------- | --------- |
+| log\_id       | UUID      |
+| timestamp     | TIMESTAMP |
+| user\_ip      | STRING    |
+| content\_id   | UUID      |
+| geo\_location | STRING    |
+| status        | INT       |
 
-1. **Edge Servers (PoPs)**: Cache and serve content from geographically distributed locations.
-2. **Origin Servers**: Central repository for original content.
-3. **Load Balancers**: Distribute traffic between edge and origin servers.
-4. **DNS Layer**: Route user requests to the nearest edge server.
-5. **Cache Management System**: Handles purging, invalidation, and expiration policies.
-6. **Monitoring & Logging**: Track request patterns, cache hit rates, and security threats.
-7. **Security Layer**: Implements TLS encryption, DDoS protection, and authentication mechanisms.
+#### `analytics`
 
-## 7. Addressing Key Issues
+| Field          | Type      |
+| -------------- | --------- |
+| content\_id    | UUID      |
+| hits           | INT       |
+| misses         | INT       |
+| bandwidth      | BIGINT    |
+| last\_accessed | TIMESTAMP |
 
-### **1. Cache Invalidation & Purging**
-- Use **cache expiration policies** with TTL (time-to-live)
-- Implement **versioning** for cache busting (e.g., `image_v2.jpg`)
-- Use **push-based cache purging** from the origin to all PoPs
+---
 
-### **2. Load Balancing & Failover**
-- Use **Anycast DNS routing** for global load distribution
-- Implement **health checks** to redirect traffic from failing servers
-- Utilize **weighted round-robin** to balance traffic
+## ✅ 5. API Design
 
-### **3. Security Considerations**
-- **DDoS Mitigation**: Rate-limiting, IP blocking, bot detection
-- **Access Controls**: Token-based authentication, signed URLs
-- **TLS/SSL Encryption**: Enforce HTTPS for secure transmission
+### 📦 Content Management
 
-### **4. Reducing Latency**
-- **Edge Computing**: Execute lightweight operations at edge nodes
-- **Compression & Minification**: Reduce payload size (e.g., Gzip, Brotli)
-- **Prefetching Strategies**: Proactively load frequently accessed content
+* `POST /api/content/upload` – Upload new content
+* `DELETE /api/content/:id` – Delete content
+* `PUT /api/content/:id` – Update metadata (e.g., TTL)
 
-### **5. Cost Optimization**
-- Use **tiered caching** to minimize origin fetch costs
-- Optimize **storage replication** to balance speed vs. expenses
-- Implement **intelligent request routing** to minimize cross-region transfer fees
+### ⚙️ Cache Management
 
-## Conclusion
+* `POST /api/cache/purge` – Purge cache globally
+* `POST /api/cache/invalidate` – Selective invalidation
 
-A well-designed CDN improves content availability, security, and performance while reducing latency and server load. Key design considerations include optimizing cache strategies, ensuring global load balancing, securing content access, and maintaining high availability and fault tolerance. The system can be scaled by adding more edge nodes, implementing efficient routing policies, and leveraging cloud-based auto-scaling solutions.
+### 📈 Analytics & Logging
+
+* `GET /api/logs` – Fetch access logs
+* `GET /api/analytics/:id` – Stats for content
+
+### 🔐 Access Control
+
+* `POST /api/security/token` – Generate signed URL
+* `POST /api/security/policy` – Set geo/IP restrictions
+
+---
+
+## ✅ 6. High-Level Architecture (with AWS Services)
+
+```
+                  +------------------------+
+                  |      End Users         |
+                  +------------------------+
+                            |
+                    DNS Lookup (Route53)
+                            |
+               +------------▼------------+
+               | AWS CloudFront (CDN PoPs)|
+               +------------+------------+
+                            |
+      ┌─────────────────────┴─────────────────────┐
+      |                                           |
++-------------+                         +-----------------+
+|  Regional   |  Cache Hit: Serve       |   Cache Miss:   |
+|  Edge Cache |  from edge              |   Forward to:   |
+| (CloudFront)|                         |   Origin Server |
++-------------+                         +-----------------+
+                                                |
+                                 +--------------▼---------------+
+                                 |      Origin Servers (S3)     |
+                                 |      / ALB + ECS App Server  |
+                                 +--------------+---------------+
+                                                |
+                               +----------------▼---------------+
+                               |     Aurora / DynamoDB (Meta)   |
+                               +--------------------------------+
+```
+
+---
+
+### AWS Services Used
+
+| Feature                         | AWS Service                         |
+| ------------------------------- | ----------------------------------- |
+| Global DNS                      | Route53                             |
+| Edge Caching                    | CloudFront                          |
+| Origin Content Storage          | S3                                  |
+| Metadata DB                     | DynamoDB or Aurora                  |
+| Custom Backend for Dynamic Data | ECS / Lambda / API Gateway          |
+| Logging & Analytics             | CloudWatch, Athena, Kinesis         |
+| Queueing                        | SQS (e.g., async invalidation jobs) |
+| Access Tokens                   | Cognito / Lambda for signed URLs    |
+| Monitoring                      | CloudWatch, X-Ray                   |
+
+---
+
+## ✅ 7. Key Issues and Solutions
+
+### 📌 A. **Caching Strategy**
+
+**Challenges**:
+
+* Content freshness
+* Cache invalidation
+* Regional preferences
+
+**Solutions**:
+
+* Use TTL-based cache expiry (e.g., `Cache-Control: max-age`)
+* Use content versioning (e.g., `/v2/image.jpg`)
+* Provide purge API to invalidate outdated content
+* Use **origin shield** to minimize repeated origin fetches
+
+---
+
+### 📌 B. **Routing & Latency Optimization**
+
+**Challenges**:
+
+* Route users to nearest PoP
+* Network congestion
+
+**Solutions**:
+
+* Use **Anycast IP** and **GeoDNS (Route53)** for regional routing
+* Implement request coalescing and pre-warming
+* Enable compression: Brotli/Gzip
+* Leverage CloudFront Regional Edge Caches
+
+---
+
+### 📌 C. **Content Replication**
+
+**Challenges**:
+
+* Propagate updates to edge locations
+* Optimize bandwidth and consistency
+
+**Solutions**:
+
+* Use **origin push** to edge caches (on upload or update)
+* Store in S3 with **S3 Transfer Acceleration**
+* Use **multi-region replication** for hot content
+
+---
+
+### 📌 D. **Handling Failures**
+
+**Challenges**:
+
+* PoP or origin failures
+
+**Solutions**:
+
+* Use **multiple redundant PoPs (CloudFront)**
+* Origin failover: S3 → ECS or backup S3 bucket
+* Retry with exponential backoff on fetch failure
+* Monitor health using AWS CloudWatch alarms and Route53 failover
+
+---
+
+### 📌 E. **Security**
+
+**Challenges**:
+
+* Prevent unauthorized access
+* Mitigate DDoS attacks
+
+**Solutions**:
+
+* Enforce HTTPS with TLS certs (ACM + CloudFront)
+* Use **signed URLs** or **signed cookies**
+* Integrate WAF with IP rate limiting, Geo restrictions
+* Use Shield Advanced for DDoS mitigation
+
+---
+
 
